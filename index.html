@@ -1,32 +1,470 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CPOR | Controle de acesso</title><meta name="description" content="Controle de entrada e saída do CPOR. Protótipo de portaria."><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231c4035'/%3E%3Cpath d='M9 24V8h14v16M14 24V13h4v11' fill='none' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E"><link rel="stylesheet" href="style.css"></head><body>
-<aside><a class="brand" href="./"><span class="mark">C</span><span>CPOR<span class="brand-sub">PORTARIA</span></span></a><div class="nav-label">CONTROLE DE ACESSO</div><nav><button class="nav" data-view="home">⌂ <span>Início</span></button><button class="nav active" data-view="movement">↔ <span>Movimentações</span></button><button class="nav" data-view="registry">▤ <span>Cadastros</span></button></nav><div class="side-bottom"><span class="status-dot"></span> Sessão de demonstração<p>Os registros são apagados ao recarregar ou fechar esta página.</p></div></aside>
-<main><header><div class="breadcrumb">CPOR / Portaria</div><time id="clock"></time></header><section id="home" hidden><div class="eyebrow">PORTARIA DO CPOR</div><h1>Controle da portaria</h1><p>Selecione como deseja começar.</p><div class="home-options"><button id="startNew"><span class="option-icon">＋</span><h2>Novo cadastro</h2><p>Cadastre uma pessoa ou viatura, com ou sem uma nova ficha.</p><strong>Cadastrar →</strong></button><button id="startSearch"><span class="option-icon">⌕</span><h2>Consultar cadastro</h2><p>Localize quem já esteve aqui e registre um novo acesso.</p><strong>Buscar cadastro →</strong></button></div><p class="home-note">Entradas e saídas de militares para o expediente normal não são registradas. Abra uma ficha apenas quando houver uma situação a anotar.</p><section class="panel recent-panel"><div class="panel-top"><div><h2>Histórico de últimos registros</h2><p>As 5 fichas mais recentes desta sessão.</p></div><button class="secondary" id="viewAll">Ver todas</button></div><div class="table-wrap"><table><thead><tr><th>Pessoa / viatura</th><th>Data e horário</th><th>Objetivo / destino</th><th>Situação</th><th>Ações</th></tr></thead><tbody id="recentBody"></tbody></table></div><div class="empty" id="recentEmpty"><h3>Nenhuma ficha registrada</h3><p>Os cadastros podem ser salvos antes de qualquer movimentação.</p></div></section></section><section class="heading"><div><div class="eyebrow">LIVRO DE CONTROLE DIGITAL</div><h1 id="pageTitle">Movimentações</h1><p id="pageDesc">Acompanhe os acessos e registre entradas e saídas.</p></div><button class="primary" id="newBtn">＋ Novo registro</button></section>
-<div class="notice"><span>i</span><div><strong>Protótipo em demonstração</strong> · Dados apenas nesta sessão. Use informações fictícias para testar.</div></div>
-<section class="metrics"><article><span>Fichas de pessoas em aberto</span><strong id="inside">0</strong><small>Não representa o efetivo presente</small></article><article><span>Viaturas em circulação</span><strong id="vehicles">0</strong><small>Saídas ainda sem retorno</small></article><article><span>Registros nesta sessão</span><strong id="total">0</strong><small>Todas as categorias</small></article><article><span>Cadastros disponíveis</span><strong id="registered">0</strong><small>Prontos para reutilizar</small></article></section>
-<section class="panel"><div class="panel-top"><div><h2 id="tableTitle">Livro de movimentações</h2><p id="tableSubtitle">Consulte os registros de todas as fichas.</p></div><span class="counter" id="count">0 registros</span></div><div class="filters"><div class="search-wrap"><span>⌕</span><input id="search" aria-label="Buscar registros" placeholder="Buscar nome, identidade ou placa..."></div><select id="categoryFilter" aria-label="Filtrar categoria"><option value="">Todas as categorias</option><option value="civil">Visitante civil</option><option value="external">Militar de outra OM</option><option value="internal">Militar do CPOR</option><option value="vehicle">Viatura da OM</option></select><select id="statusFilter" aria-label="Filtrar situação"><option value="">Todas as situações</option><option value="open">Em aberto</option><option value="closed">Encerradas</option><option value="finalized">Finalizadas sem saída / retorno</option></select></div><div class="table-wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div><div class="empty" id="empty"><div class="empty-icon">↔</div><h3>Nenhuma movimentação por aqui</h3><p>Comece registrando uma entrada de pessoa<br>ou uma saída de viatura.</p><button class="secondary" id="emptyNew">＋ Criar primeiro registro</button></div><footer class="table-footer"><span id="footerCount">Nenhum registro nesta sessão</span><span>Horários de Brasília</span></footer></section><p class="footnote">CPOR · Controle de acesso <span>Versão inicial / Front-end</span></p><section id="dialog" class="form-page" hidden>
-<form id="form">
-  <div class="dialog-head"><div><div class="eyebrow">PORTARIA</div><h2 id="formTitle">Novo cadastro</h2></div><button type="button" class="icon-btn" id="close" aria-label="Voltar">×</button></div>
-  <div class="dialog-body">
-    <section id="profileSection">
-      <label class="full">Categoria<select id="type" name="type"><option value="civil">Visitante civil</option><option value="external">Militar de outra OM</option><option value="internal">Militar do CPOR</option><option value="vehicle">Viatura da OM</option></select></label>
-      <div class="step-title">Identificação</div><p class="helper" id="keyHint"></p><div class="form-grid" id="keyFields"></div><div class="form-grid" id="profileFields"></div>
-      <p class="helper">Salvar o cadastro não registra uma entrada ou saída.</p>
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CPOR | Controle de acesso</title>
+    <meta
+      name="description"
+      content="Controle de entrada e saída do CPOR. Protótipo de portaria."
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,200,0,0"
+    />
+    <link rel="icon" type="image/png" href="./src/CPOR-LOGO.png">
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <aside>
+      <a class="brand" href="./index.html">
+        <img src="./src/CPOR-LOGO.png" alt="CPOR" srcset="" class="mark">
+        <span>
+          <span>CPOR/R</span>
+          <span class="brand-sub">ESCOLA DE FAZER HERÓIS</span>
+        </span>
+      </a>
+      <div class="nav-label">CONTROLE DE ACESSO</div>
+      <div class="nav-switch">
+        <button
+          type="button"
+          id="navToggle"
+          class="nav-toggle"
+          aria-expanded="false"
+          aria-controls="navOptions"
+        >
+          <span id="navCurrent">Início</span
+          ><span class="nav-chevron" aria-hidden="true">›</span>
+        </button>
+        <nav id="navOptions" aria-label="Navegação" hidden>
+          <button class="nav" data-view="home">
+            <span class="material-symbols-rounded">home</span>
+            <span>Início</span>
+          </button>
+          <button class="nav active" data-view="movement">
+            <span class="material-symbols-rounded">search</span>
+            <span>Histórico</span></button
+          ><button class="nav" data-view="daily">
+            <span class="material-symbols-rounded">today</span>
+            <span>Ficha diária</span></button
+          ><button class="nav" data-view="registry">
+            <span class="material-symbols-rounded">person</span>
+            <span>Cadastros</span></button
+          ><button class="nav" data-view="audit">
+            <span class="material-symbols-rounded">history</span>
+            <span>Alterações</span>
+          </button>
+        </nav>
+      </div>
+      <div class="side-bottom">
+        <span class="status-dot"></span> Sessão de demonstração
+        <p>Os registros são apagados ao recarregar ou fechar esta página.</p>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <div class="breadcrumb">CPOR / Portaria</div>
+        <time id="clock"></time>
+      </header>
+      <section id="home" hidden>
+        <div class="eyebrow">PORTARIA DO CPOR</div>
+        <h1>Controle da portaria</h1>
+        <p>Selecione como deseja começar.</p>
+        <div class="today-card">
+          <div>
+            <span class="eyebrow">FICHA DO DIA</span
+            ><strong id="homeSheetDate"></strong
+            ><span id="homeSheetCount"></span>
+          </div>
+          <button class="primary" id="openToday">Ver dia</button>
+        </div>
+        <div class="home-options">
+          <button id="startNew">
+            <span class="option-icon">＋</span>
+            <h2>Novo cadastro</h2>
+            <p>Cadastre uma pessoa ou viatura.</p>
+            <strong>Cadastrar →</strong></button
+          ><button id="startSearch">
+            <span class="option-icon">⌕</span>
+            <h2>Consultar cadastro</h2>
+            <p>Localize quem já esteve aqui e registre um novo acesso.</p>
+            <strong>Buscar cadastro →</strong>
+          </button>
+        </div>
+        <p class="home-note">
+          Entradas e saídas de militares para o expediente normal não são
+          registradas. Registre apenas as situações necessárias.
+        </p>
+        <section class="panel recent-panel">
+          <div class="panel-top">
+            <div>
+              <h2>Últimos fluxos</h2>
+              <p>
+                Os 5 últimos lançamentos, incluindo registros de dias
+                anteriores.
+              </p>
+            </div>
+            <button class="secondary" id="viewAll">Histórico</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pessoa / viatura</th>
+                  <th>Registrado em / fluxo</th>
+                  <th>Objetivo / destino</th>
+                  <th>Acesso atual</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="recentBody"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="recentEmpty">
+            <h3>Nenhum fluxo</h3>
+            <p>Cadastros e fluxos são independentes.</p>
+          </div>
+        </section>
+      </section>
+      <section class="heading">
+        <div>
+          <div class="eyebrow">LIVRO DE CONTROLE DIGITAL</div>
+          <h1 id="pageTitle">Movimentações</h1>
+          <p id="pageDesc">
+            Acompanhe os acessos e registre entradas e saídas.
+          </p>
+        </div>
+        <button class="primary" id="newBtn">＋ Novo registro</button>
+      </section>
+      <div class="notice">
+        <span>i</span>
+        <div>
+          <strong>Protótipo em demonstração</strong> · Dados apenas nesta
+          sessão. Use informações fictícias para testar.
+        </div>
+      </div>
+      <section class="metrics">
+        <article>
+          <span>Acessos pendentes</span><strong id="inside">0</strong
+          ><small>Não representa o efetivo presente</small>
+        </article>
+        <article>
+          <span>Viaturas em circulação</span><strong id="vehicles">0</strong
+          ><small>Saídas ainda sem retorno</small>
+        </article>
+        <article>
+          <span>Fluxos registrados</span><strong id="total">0</strong
+          ><small>Todas as categorias</small>
+        </article>
+        <article>
+          <span>Cadastros</span><strong id="registered">0</strong
+          ><small>Prontos para reutilizar</small>
+        </article>
+      </section>
+      <section id="historyControls" class="history-controls">
+        <label
+          >Visualização<select id="historyMode">
+            <option value="registry">Cadastros</option>
+            <option value="movement">Todos os fluxos</option>
+            <option value="daily">Por dia</option>
+            <option value="audit">Alterações</option>
+          </select></label
+        >
+        <div id="dayControls" class="day-controls" hidden>
+          <button class="secondary" id="prevDay" aria-label="Dia anterior">
+            ‹</button
+          ><label>Dia<input id="dayFilter" type="date" /></label
+          ><button class="secondary" id="nextDay" aria-label="Próximo dia">
+            ›</button
+          ><button class="secondary" id="todayBtn">Hoje</button>
+        </div>
+      </section>
+      <section id="dailySummary" class="daily-summary" hidden>
+        <div class="daily-summary-top">
+          <div>
+            <h2 id="sheetHeading"></h2>
+            <p id="sheetTimes"></p>
+          </div>
+          <span id="sheetState" class="pill"></span>
+        </div>
+        <div class="daily-summary-foot">
+          <strong id="sheetCount"></strong
+          ><span>Virada automática às 00h · Brasília</span>
+        </div>
+        <div id="carryPanel" class="carry-panel" hidden>
+          <span id="carryCount"></span
+          ><button class="row-action" id="viewPending">Ver pendências</button>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-top">
+          <div>
+            <h2 id="tableTitle">Livro de movimentações</h2>
+            <p id="tableSubtitle">Consulte os registros de todas as fichas.</p>
+          </div>
+          <span class="counter" id="count">0 registros</span>
+        </div>
+        <div class="filters">
+          <div class="search-wrap">
+            <span>⌕</span
+            ><input
+              id="search"
+              aria-label="Buscar registros"
+              placeholder="Buscar nome, identidade ou placa..."
+            />
+          </div>
+          <select id="categoryFilter" aria-label="Filtrar categoria">
+            <option value="">Todas as categorias</option>
+            <option value="civil">Visitante civil</option>
+            <option value="external">Militar de outra OM</option>
+            <option value="internal">Militar do CPOR</option>
+            <option value="vehicle">Viatura da OM</option></select
+          ><select id="statusFilter" aria-label="Filtrar situação">
+            <option value="">Todos os acessos</option>
+            <option value="open">Pendentes</option>
+            <option value="closed">Encerrados</option>
+            <option value="finalized">Anotações finalizadas</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="empty">
+          <div class="empty-icon">↔</div>
+          <h3>Nenhuma movimentação por aqui</h3>
+          <p>
+            Comece registrando uma entrada de pessoa<br />ou uma saída de
+            viatura.
+          </p>
+          <button class="secondary" id="emptyNew">＋ Novo cadastro</button>
+        </div>
+        <footer class="table-footer">
+          <span id="footerCount">Nenhum registro nesta sessão</span
+          ><span>Horários de Brasília</span>
+        </footer>
+      </section>
+      <p class="footnote">
+        CPOR · Controle de acesso <span>Versão inicial / Front-end</span>
+      </p>
+      <section id="dialog" class="form-page" hidden>
+        <form id="form">
+          <div class="dialog-head">
+            <div>
+              <div class="eyebrow">PORTARIA</div>
+              <h2 id="formTitle">Novo cadastro</h2>
+            </div>
+            <button
+              type="button"
+              class="icon-btn"
+              id="close"
+              aria-label="Voltar"
+            >
+              ×
+            </button>
+          </div>
+          <div class="dialog-body">
+            <section id="profileSection">
+              <label class="full"
+                >Categoria<select id="type" name="type">
+                  <option value="civil">Visitante civil</option>
+                  <option value="external">Militar de outra OM</option>
+                  <option value="internal">Militar do CPOR</option>
+                  <option value="vehicle">Viatura da OM</option>
+                </select></label
+              >
+              <div class="step-title">Identificação</div>
+              <p class="helper" id="keyHint"></p>
+              <div class="form-grid" id="keyFields"></div>
+              <div class="form-grid" id="profileFields"></div>
+              <p class="helper">
+                Salvar o cadastro não registra uma entrada ou saída.
+              </p>
+            </section>
+            <section id="entrySection" hidden>
+              <div id="selectedSummary"></div>
+              <p class="operational-note" id="entryHint"></p>
+              <div class="step-title">Novo fluxo</div>
+              <div class="form-grid" id="visitFields"></div>
+              <label class="full"
+                >Objetivo / motivo <span class="optional">(opcional)</span
+                ><textarea
+                  name="purpose"
+                  rows="2"
+                  maxlength="1000"
+                  placeholder="Descreva o objetivo, se necessário"
+                ></textarea>
+              </label>
+            </section>
+            <p class="form-error" id="error" role="alert"></p>
+          </div>
+          <div class="dialog-footer">
+            <button type="button" class="secondary" id="cancel">Voltar</button
+            ><button
+              type="submit"
+              name="saveMode"
+              value="only"
+              class="secondary"
+              id="saveOnly"
+            >
+              Salvar cadastro</button
+            ><button
+              class="primary"
+              type="submit"
+              id="submit"
+              name="saveMode"
+              value="entry"
+            >
+              Registrar fluxo
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+    <section
+      id="matchPanel"
+      class="match-bubble"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="matchTitle"
+      aria-describedby="matchHelp"
+      hidden
+    >
+      <div class="bubble-head">
+        <div>
+          <h2 id="matchTitle">É esta pessoa?</h2>
+          <span id="matchCount" role="status" aria-live="polite"></span>
+        </div>
+      </div>
+      <p id="matchHelp">Selecione para preencher os dados.</p>
+      <div id="matchList" class="match-list"></div>
+      <button type="button" id="dismissMatch" class="bubble-dismiss">
+        Continuar digitando
+      </button>
     </section>
-    <section id="entrySection" hidden>
-      <div id="selectedSummary"></div><p class="operational-note" id="entryHint"></p>
-      <div class="step-title">Nova ficha de movimentação</div><div class="form-grid" id="visitFields"></div>
-      <label class="full">Observações <span class="optional">(opcional)</span><textarea name="notes" rows="2" maxlength="1000" placeholder="Informações adicionais sobre esta ficha"></textarea></label>
-    </section>
-    <p class="form-error" id="error" role="alert"></p>
-  </div>
-  <div class="dialog-footer"><button type="button" class="secondary" id="cancel">Voltar</button><button type="submit" name="saveMode" value="only" class="secondary" id="saveOnly">Salvar somente cadastro</button><button class="primary" type="submit" id="submit" name="saveMode" value="entry">Registrar fluxo</button></div>
-</form>
-</section></main>
-<section id="matchPanel" class="match-bubble" role="dialog" aria-modal="false" aria-labelledby="matchTitle" aria-describedby="matchHelp" hidden>
-  <div class="bubble-head"><div><h2 id="matchTitle">É esta pessoa?</h2><span id="matchCount" role="status" aria-live="polite"></span></div></div>
-  <p id="matchHelp">Selecione para preencher os dados.</p><div id="matchList" class="match-list"></div><button type="button" id="dismissMatch" class="bubble-dismiss">Continuar digitando</button>
-</section>
-<dialog id="finishDialog" class="finish-dialog" aria-labelledby="finishTitle">
-  <form id="finishForm"><div class="dialog-head"><div><div class="eyebrow">ENCERRAR ANOTAÇÃO</div><h2 id="finishTitle">Finalizar ficha</h2></div></div><div class="dialog-body"><strong id="finishName"></strong><p class="operational-note" id="finishHelp"></p><div class="form-grid"><label>Data *<input type="date" name="endDate" required></label><label>Horário *<input type="time" name="endTime" required></label></div><label id="reasonLabel">Motivo da finalização *<textarea name="endReason" rows="3" maxlength="1000" placeholder="Ex.: pernoitou e permaneceu no CPOR para o expediente"></textarea></label><p class="form-error" id="finishError" role="alert"></p></div><div class="dialog-footer"><button type="button" class="secondary" id="cancelFinish">Cancelar</button><button class="primary" id="confirmFinish" type="submit">Confirmar</button></div></form>
-</dialog>
-<div class="toast" id="toast" role="status"></div><script src="app.js"></script></body></html>
+    <dialog
+      id="finishDialog"
+      class="finish-dialog"
+      aria-labelledby="finishTitle"
+    >
+      <form id="finishForm">
+        <div class="dialog-head">
+          <div>
+            <div class="eyebrow">ENCERRAR ANOTAÇÃO</div>
+            <h2 id="finishTitle">Finalizar anotação</h2>
+          </div>
+        </div>
+        <div class="dialog-body">
+          <strong id="finishName"></strong>
+          <p class="operational-note" id="finishHelp"></p>
+          <div class="form-grid">
+            <label>Data *<input type="date" name="endDate" required /></label
+            ><label
+              >Horário *<input type="time" name="endTime" required
+            /></label>
+          </div>
+          <label id="reasonLabel"
+            >Motivo <span class="optional">(opcional)</span
+            ><textarea
+              name="endReason"
+              rows="3"
+              maxlength="1000"
+              placeholder="Ex.: pernoitou e permaneceu no CPOR para o expediente"
+            ></textarea>
+          </label>
+          <p class="form-error" id="finishError" role="alert"></p>
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="secondary" id="cancelFinish">
+            Cancelar</button
+          ><button class="primary" id="confirmFinish" type="submit">
+            Confirmar
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog
+      id="responsibleDialog"
+      class="finish-dialog"
+      aria-labelledby="responsibleTitle"
+    >
+      <form id="responsibleForm">
+        <div class="dialog-head">
+          <div>
+            <div class="eyebrow">IDENTIFICAÇÃO DO RESPONSÁVEL</div>
+            <h2 id="responsibleTitle">Editar cadastro</h2>
+          </div>
+        </div>
+        <div class="dialog-body">
+          <strong id="responsibleTarget"></strong>
+          <p class="operational-note" id="responsibleHint"></p>
+          <div class="form-grid">
+            <label
+              >Posto / graduação *<select
+                name="actorRank"
+                required
+              ></select></label
+            ><label
+              >Nome de guerra *<input
+                name="actorWarName"
+                required
+                autocomplete="off"
+                maxlength="150"
+            /></label>
+          </div>
+          <p class="helper">
+            Informe posto e nome de guerra. Não é necessário cadastro prévio.
+          </p>
+          <p class="form-error" id="responsibleError" role="alert"></p>
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="secondary" id="cancelResponsible">
+            Cancelar</button
+          ><button type="submit" class="primary" id="responsibleSubmit">
+            Continuar
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog
+      id="editFlowDialog"
+      class="finish-dialog"
+      aria-labelledby="editFlowTitle"
+    >
+      <form id="editFlowForm">
+        <div class="dialog-head">
+          <div>
+            <div class="eyebrow">CORREÇÃO DE FLUXO</div>
+            <h2 id="editFlowTitle">Editar fluxo</h2>
+          </div>
+        </div>
+        <div class="dialog-body">
+          <strong id="editFlowName"></strong>
+          <p class="operational-note" id="editFlowHint"></p>
+          <div class="form-grid" id="editFlowFields"></div>
+          <label id="editPurposeLabel"
+            >Objetivo / motivo <span class="optional">(opcional)</span
+            ><textarea
+              name="purpose"
+              rows="3"
+              maxlength="1000"
+            ></textarea></label
+          ><label id="editReasonLabel"
+            >Motivo da finalização <span class="optional">(opcional)</span
+            ><textarea name="reason" rows="3" maxlength="1000"></textarea>
+          </label>
+          <p class="form-error" id="editFlowError" role="alert"></p>
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="secondary" id="cancelEditFlow">
+            Cancelar</button
+          ><button type="submit" class="primary">Salvar alterações</button>
+        </div>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
