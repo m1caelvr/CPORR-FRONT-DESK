@@ -4,7 +4,7 @@
 const cadastros = []; // PK lógica: tipo + chave normalizada.
 const movimentacoes = []; // PK: id; referência ao cadastro: tipo + chave.
 const types = { civil: 'Visitante civil', external: 'Militar de outra OM', internal: 'Militar do CPOR', vehicle: 'Viatura da OM' };
-const ranks = ['Soldado', 'Cabo', '3º Sargento', '2º Sargento', '1º Sargento', 'Subtenente', 'Aspirante a Oficial', '2º Tenente', '1º Tenente', 'Capitão', 'Major', 'Tenente-Coronel', 'Coronel', 'General de Brigada', 'General de Divisão', 'General de Exército', 'Aluno', 'Cadete'];
+const ranks = ['Aluno', 'Cadete', 'SD', 'CB', '3º SGT', '2º SGT', '1º SGT', 'ST', 'ASP', '2º TEN', '1º TEN', 'CAP', 'MAJ', 'TC', 'CEL', 'GEN BDA', 'GEN DIV', 'GEN EX'];
 const profileNames = { civil: ['name', 'phone'], external: ['rank', 'warName', 'name', 'om'], internal: ['section'], vehicle: ['model', 'om'] };
 const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
 const docNorm = s => norm(s).replace(/[^A-Z0-9]/g, '');
