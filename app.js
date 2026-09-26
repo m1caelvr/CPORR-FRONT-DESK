@@ -783,7 +783,7 @@ function openForm(record = null) {
   if (!record) $("submit").textContent = "Salvar e registrar fluxo";
   $("cancel").innerHTML = record
     ? "Cadastros"
-    : '<span class="material-symbols-fill">home</span>';
+    : '<span class="material-symbols-rounded">home</span>';
   route(record ? "entry" : "profile");
 }
 function openEdit(c, actor) {
