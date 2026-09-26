@@ -55,6 +55,7 @@ aside {
     padding: 34px 22px;
     display: flex;
     flex-direction: column;
+    z-index: 10;
 }
 .brand {
     display: flex;
