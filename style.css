@@ -26,7 +26,6 @@ textarea {
 }
 
 .material-symbols-rounded {
-    /* font-size: inherit; */
     font-variation-settings:
     'FILL' 0,
     'wght' 200,
@@ -350,6 +349,11 @@ td small {
     color: #829087;
     margin-top: 3px;
 }
+td.actions {
+    display: flex;
+    flex-direction: row;
+    gap: 7px;
+}
 .pill {
     background: #e9f2ed;
     color: #37634b;
@@ -613,9 +617,6 @@ label textarea {
         padding: 11px;
         font-size: 12px;
     }
-    .eyebrow {
-        font-size: 9px;
-    }
     .metrics {
         grid-template-columns: repeat(2, 1fr);
         margin: 18px 0;
@@ -822,7 +823,6 @@ label textarea {
         width: 100%;
     }
 }
-/* Cadastro independente, histórico e encerramentos. */
 .recent-panel {
     margin-top: 30px;
 }
@@ -831,7 +831,7 @@ label textarea {
 }
 .row-actions {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: flex-start;
     gap: 7px;
 }
@@ -944,7 +944,6 @@ body:has(dialog[open]) {
         min-width: 135px;
     }
 }
-/* Balão ancorado ao campo; não ocupa espaço no formulário. */
 .match-bubble {
     position: fixed;
     z-index: 40;
@@ -1183,7 +1182,6 @@ body:has(dialog[open]) {
         font-size: 17px;
     }
 }
-/* Menu recolhido e registro de alterações. */
 .nav-switch {
     position: relative;
     width: 100%;
@@ -1292,13 +1290,9 @@ body:has(dialog[open]) {
     }
 }
 
-/* Duas datas: ocorrência e lançamento. */
 .flow-kind {
     font-weight: 600;
     color: var(--green);
-}
-.edit-flow-action {
-    margin-top: 8px;
 }
 #editFlowName {
     overflow-wrap: anywhere;

@@ -6,7 +6,7 @@
     <title>CPOR | Controle de acesso</title>
     <meta
       name="description"
-      content="Controle de entrada e saída do CPOR. Protótipo de portaria."
+      content="Controle de entrada e saída do CPOR."
     />
     <link
       rel="stylesheet"
@@ -42,7 +42,7 @@
             <span>Início</span>
           </button>
           <button class="nav active" data-view="movement">
-            <span class="material-symbols-rounded">search</span>
+            <span class="material-symbols-rounded">history</span>
             <span>Histórico</span></button
           ><button class="nav" data-view="daily">
             <span class="material-symbols-rounded">today</span>
@@ -51,7 +51,7 @@
             <span class="material-symbols-rounded">person</span>
             <span>Cadastros</span></button
           ><button class="nav" data-view="audit">
-            <span class="material-symbols-rounded">history</span>
+            <span class="material-symbols-rounded">manage_history</span>
             <span>Alterações</span>
           </button>
         </nav>
@@ -112,7 +112,7 @@
                 <tr>
                   <th>Pessoa / viatura</th>
                   <th>Registrado em / fluxo</th>
-                  <th>Objetivo / destino</th>
+                  <th>Motivo / destino</th>
                   <th>Acesso atual</th>
                   <th>Ações</th>
                 </tr>
@@ -253,7 +253,6 @@
         <form id="form">
           <div class="dialog-head">
             <div>
-              <div class="eyebrow">PORTARIA</div>
               <h2 id="formTitle">Novo cadastro</h2>
             </div>
             <button
@@ -267,8 +266,9 @@
           </div>
           <div class="dialog-body">
             <section id="profileSection">
-              <label class="full"
-                >Categoria<select id="type" name="type">
+              <label class="full">
+                Categoria
+                <select id="type" name="type">
                   <option value="civil">Visitante civil</option>
                   <option value="external">Militar de outra OM</option>
                   <option value="internal">Militar do CPOR</option>
@@ -288,15 +288,6 @@
               <p class="operational-note" id="entryHint"></p>
               <div class="step-title">Novo fluxo</div>
               <div class="form-grid" id="visitFields"></div>
-              <label class="full"
-                >Objetivo / motivo <span class="optional">(opcional)</span
-                ><textarea
-                  name="purpose"
-                  rows="2"
-                  maxlength="1000"
-                  placeholder="Descreva o objetivo, se necessário"
-                ></textarea>
-              </label>
             </section>
             <p class="form-error" id="error" role="alert"></p>
           </div>
@@ -359,12 +350,7 @@
         <div class="dialog-body">
           <strong id="finishName"></strong>
           <p class="operational-note" id="finishHelp"></p>
-          <div class="form-grid">
-            <label>Data *<input type="date" name="endDate" required /></label
-            ><label
-              >Horário *<input type="time" name="endTime" required
-            /></label>
-          </div>
+          <div class="form-grid" id="finishFields"></div>
           <label id="reasonLabel"
             >Motivo <span class="optional">(opcional)</span
             ><textarea
@@ -402,12 +388,12 @@
           <p class="operational-note" id="responsibleHint"></p>
           <div class="form-grid">
             <label
-              >Posto / graduação *<select
+              >Seu posto / graduação<select
                 name="actorRank"
                 required
               ></select></label
             ><label
-              >Nome de guerra *<input
+              >Seu nome de guerra<input
                 name="actorWarName"
                 required
                 autocomplete="off"
@@ -415,7 +401,7 @@
             /></label>
           </div>
           <p class="helper">
-            Informe posto e nome de guerra. Não é necessário cadastro prévio.
+            Informe posto e nome de guerra. Essa alteração será registrada no histórico.
           </p>
           <p class="form-error" id="responsibleError" role="alert"></p>
         </div>
@@ -444,14 +430,7 @@
           <strong id="editFlowName"></strong>
           <p class="operational-note" id="editFlowHint"></p>
           <div class="form-grid" id="editFlowFields"></div>
-          <label id="editPurposeLabel"
-            >Objetivo / motivo <span class="optional">(opcional)</span
-            ><textarea
-              name="purpose"
-              rows="3"
-              maxlength="1000"
-            ></textarea></label
-          ><label id="editReasonLabel"
+          <label id="editReasonLabel"
             >Motivo da finalização <span class="optional">(opcional)</span
             ><textarea name="reason" rows="3" maxlength="1000"></textarea>
           </label>

@@ -52,7 +52,7 @@ function syncSheets(now = new Date()) {
   lastSheetDay = today;
   return changed;
 }
-function recordFlow(movement, kind, at, reason = "", now = new Date()) {
+function recordFlow(movement, kind, at, reason = "", now = new Date(), details = movement) {
   syncSheets(now);
   const dia = dayKey(at),
     sheet = ensureSheet(dia, now);
@@ -68,13 +68,9 @@ function recordFlow(movement, kind, at, reason = "", now = new Date()) {
     dia,
     registradoEm: new Date(now).toISOString(),
     retroativo: dia < dayKey(now),
-    purpose: movement.purpose,
-    destination: movement.destination,
+    ...flowDetails(details),
+    direction: kind === "finalizacao" ? "" : kind === "saida" ? "Saída" : "Entrada",
     motivo: reason,
-    notes: movement.notes,
-    contact: movement.contact,
-    driver: movement.driver,
-    passengers: movement.passengers,
   };
   fluxos.push(event);
   sheet.fluxoIds.push(event.id);
@@ -93,8 +89,8 @@ const types = {
 const ranks = [
   "Aluno",
   "Cadete",
-  "SD EP",
   "SD EV",
+  "SD EP",
   "CB",
   "3º SGT",
   "2º SGT",
@@ -111,9 +107,22 @@ const ranks = [
   "GEN DIV",
   "GEN EX",
 ];
+ranks.driver = [
+  "SD EV",
+  "SD EP",
+  "CB",
+  "3º SGT",
+  "2º SGT",
+  "1º SGT",
+  "ST",
+  "ASP",
+  "2º TEN",
+  "1º TEN",
+];
+
 const profileNames = {
   civil: ["name", "phone"],
-  external: ["rank", "warName", "name", "om"],
+  external: ["rank", "name", "warName", "om", "phone"],
   internal: ["section"],
   vehicle: ["model", "om"],
 };
@@ -229,9 +238,11 @@ function saveProfile(d, existing = null, actor = null) {
   const dados = {};
   for (const name of [...keyNames(tipo), ...profileNames[tipo]]) {
     dados[name] = trim(d[name]);
-    if (name !== "phone" && !dados[name])
+    if (!dados[name])
       throw Error("Preencha todos os campos obrigatórios do cadastro.");
   }
+  if (isMilitary(tipo) && !ranks.includes(dados.rank))
+    throw Error("Selecione um posto / graduação válido.");
   if (existing) {
     const before = snapshot(existing),
       at = new Date().toISOString();
@@ -297,27 +308,50 @@ function parseMoment(day, time) {
     throw Error("A data e o horário não podem estar no futuro.");
   return timestamp.toISOString();
 }
+// Dados do fluxo são independentes dos dados permanentes do cadastro.
+const directions = ["Entrada", "Saída"];
+const flowDetailKeys = [
+  "destination", "vehiclePlate", "purpose", "driverRank", "driverWarName",
+  "vehicleChief", "odometerInitial", "odometerFinal",
+];
+const flowDetails = (data) =>
+  Object.fromEntries(flowDetailKeys.map((key) => [key, trim(data[key])]));
+const directionFor = (flow) => flow.acao === "saida" ? "Saída" : "Entrada";
+const oppositeDirection = (direction) => direction === "Saída" ? "Entrada" : "Saída";
+const closingKind = (direction) => direction === "Saída" ? "saida" : "retorno";
+
+function validateFlowData(tipo, data) {
+  if (!directions.includes(data.direction))
+    throw Error("Selecione entrada ou saída.");
+  const details = flowDetails({ destination: data.destination });
+  if (!details.destination) throw Error("Informe o destino.");
+  if (tipo === "vehicle") {
+    if (!ranks.includes(data.driverRank))
+      throw Error("Informe o posto / graduação do motorista.");
+    if (!trim(data.driverWarName)) throw Error("Informe o nome de guerra do motorista.");
+    if (!trim(data.vehicleChief)) throw Error("Informe o chefe da viatura.");
+    details.driverRank = data.driverRank;
+    details.driverWarName = trim(data.driverWarName);
+    details.vehicleChief = trim(data.vehicleChief);
+    const odometer = data.direction === "Saída" ? "odometerInitial" : "odometerFinal";
+    if (!trim(data[odometer]))
+      throw Error(`Informe o odômetro ${data.direction === "Saída" ? "inicial" : "final"}.`);
+    // Preserva a leitura como texto, inclusive separadores e casas decimais.
+    details[odometer] = trim(data[odometer]);
+  } else {
+    details.vehiclePlate = trim(data.vehiclePlate) || "N/A";
+    if (tipo === "civil" || tipo === "external") details.purpose = trim(data.purpose);
+  }
+  return { ...details, direction: data.direction };
+}
+
 function addMovement(c, d) {
   if (!cadastros.includes(c) || !isActive(c))
     throw Error("Selecione um cadastro existente.");
   if (findOpen(c))
-    throw Error(
-      "Há um acesso pendente. Registre a saída, o retorno ou finalize a anotação.",
-    );
-  if (!trim(d.destination)) throw Error("Informe o destino.");
-  if (c.tipo === "vehicle" && !trim(d.driver))
-    throw Error("Informe o motorista.");
-  if (
-    c.tipo === "internal" &&
-    !["Entrada no CPOR", "Saída do CPOR"].includes(d.direction)
-  )
-    throw Error("Selecione a movimentação.");
+    throw Error("Há um acesso pendente. Registre a saída, a entrada ou finalize a anotação.");
+  const details = validateFlowData(c.tipo, d);
   const inicio = parseMoment(d.visitDate, d.visitTime);
-  const direction =
-    c.tipo === "vehicle" ||
-    (c.tipo === "internal" && d.direction === "Saída do CPOR")
-      ? "Saída"
-      : "Entrada";
   const m = {
     id: ++seq,
     cadastroId: c.id,
@@ -325,46 +359,42 @@ function addMovement(c, d) {
     chave: c.chave,
     dados: { ...c.dados },
     inicio,
-    direction,
-    purpose: trim(d.purpose),
-    destination: trim(d.destination),
-    contact: trim(d.contact),
-    driver: trim(d.driver),
-    passengers: trim(d.passengers),
-    notes: trim(d.notes),
+    ...details,
     fim: null,
     encerramento: null,
   };
   movimentacoes.push(m);
-  recordFlow(m, direction === "Saída" ? "saida" : "entrada", inicio);
+  recordFlow(m, m.direction === "Saída" ? "saida" : "entrada", inicio);
   return m;
 }
-function closeMovement(id, mode, day, time, reason = "") {
+
+function closeMovement(id, mode, day, time, reason = "", data = {}) {
   const m = movimentacoes.find((r) => r.id === id);
   if (!m || !isOpen(m))
     throw Error("Este acesso já foi encerrado ou não foi encontrado.");
   if (!["movement", "finalize"].includes(mode)) throw Error("Ação inválida.");
   if (mode === "finalize" && !isMilitary(m.tipo))
-    throw Error("Esta categoria exige o registro de saída ou retorno.");
+    throw Error("Esta categoria exige o registro de saída ou entrada.");
   const em = parseMoment(day, time);
   if (new Date(em) < new Date(m.inicio))
     throw Error("O encerramento não pode ocorrer antes do início do acesso.");
-  const tipo =
-    mode === "finalize"
-      ? "finalizacao"
-      : m.direction === "Saída"
-        ? "retorno"
-        : "saida";
+  let details = flowDetails(m);
+  if (mode === "movement") {
+    if (data.direction !== oppositeDirection(m.direction))
+      throw Error("Selecione o sentido oposto ao fluxo que abriu este acesso.");
+    details = validateFlowData(m.tipo, data);
+  }
+  const tipo = mode === "finalize" ? "finalizacao" : closingKind(details.direction);
   m.encerramento = {
     tipo,
     em,
     motivo: mode === "finalize" ? trim(reason) : "",
+    ...details,
   };
   m.fim = mode === "finalize" ? null : em;
-  recordFlow(m, tipo, em, m.encerramento.motivo);
+  recordFlow(m, tipo, em, m.encerramento.motivo, new Date(), details);
   return m;
 }
-
 function canEditFlow(flow, now = new Date()) {
   const today = dayKey(now);
   return (
@@ -390,19 +420,19 @@ function editFlow(id, data, actor) {
   if (!initial && em < movement.inicio)
     throw Error("O encerramento não pode ocorrer antes do início do acesso.");
   const changes = { em, dia: dayKey(em) };
-  if (initial) {
-    if (!trim(data.destination)) throw Error("Informe o destino.");
-    if (flow.tipo === "vehicle" && !trim(data.driver))
-      throw Error("Informe o motorista.");
-    for (const key of [
-      "purpose",
-      "destination",
-      "contact",
-      "driver",
-      "passengers",
-    ])
-      changes[key] = trim(data[key]);
-  } else if (flow.acao === "finalizacao") changes.motivo = trim(data.reason);
+  if (flow.acao === "finalizacao") {
+    changes.motivo = trim(data.reason);
+  } else {
+    Object.assign(changes, validateFlowData(flow.tipo, data));
+    const closingFlow = fluxos.find((f) => f.movimentoId === movement.id && f !== flow && !isInitialFlow(f));
+    if (initial && closingFlow && closingFlow.acao !== "finalizacao" && changes.direction === directionFor(closingFlow))
+      throw Error("O início e o encerramento do acesso devem ter sentidos opostos.");
+    if (!initial && changes.direction !== oppositeDirection(movement.direction))
+      throw Error("O encerramento deve ter sentido oposto ao início do acesso.");
+    changes.acao = initial
+      ? changes.direction === "Saída" ? "saida" : "entrada"
+      : closingKind(changes.direction);
+  }
   const before = { ...snapshot(flow), acesso: snapshot(movement) },
     at = new Date().toISOString();
   syncSheets();
@@ -419,18 +449,16 @@ function editFlow(id, data, actor) {
   });
   if (initial) {
     movement.inicio = em;
-    for (const key of [
-      "purpose",
-      "destination",
-      "contact",
-      "driver",
-      "passengers",
-    ])
-      movement[key] = changes[key];
+    Object.assign(movement, flowDetails(flow), { direction: changes.direction });
   } else {
     movement.encerramento.em = em;
     if (flow.acao === "finalizacao") movement.encerramento.motivo = flow.motivo;
-    else movement.fim = em;
+    else {
+      movement.fim = em;
+      Object.assign(movement.encerramento, flowDetails(flow), {
+        tipo: flow.acao, direction: changes.direction,
+      });
+    }
   }
   movement.atualizadoEm = at;
   auditChange(
@@ -515,7 +543,7 @@ function field(
   const control = options
     ? `<select name="${name}" ${required ? "required" : ""}><option value="">Selecione</option>${options.map((x) => `<option${x === value ? " selected" : ""}>${esc(x)}</option>`).join("")}</select>`
     : `<input type="${type}" name="${name}" value="${esc(value)}" maxlength="150" ${required ? "required" : ""} autocomplete="off">`;
-  return `<label>${title}${required ? " *" : ' <span class="optional">(opcional)</span>'}${control}</label>`;
+  return `<label>${title}${required ? "" : ' <span class="optional">(opcional)</span>'}${control}</label>`;
 }
 function notify(msg) {
   $("toast").textContent = msg;
@@ -541,26 +569,20 @@ function setupProfile() {
       : t === "vehicle"
         ? "Informe a placa para verificar se já há cadastro."
         : "Informe a identidade para verificar se já há cadastro.";
-  $("keyFields").innerHTML =
-    t === "internal"
-      ? field("rank", "Posto / graduação", ranks) +
-        field("warName", "Nome de guerra")
-      : t === "vehicle"
-        ? field("plate", "Placa")
-        : field("identity", "Identidade");
-  $("profileFields").innerHTML =
-    t === "civil"
-      ? field("name", "Nome completo") +
-        field("phone", "Telefone", null, false, "tel")
-      : t === "external"
-        ? field("rank", "Posto / graduação", ranks) +
-          field("warName", "Nome de guerra") +
-          field("name", "Nome completo") +
-          field("om", "OM de origem")
-        : t === "internal"
-          ? field("section", "Seção / subunidade")
-          : field("model", "Modelo / tipo de viatura") +
-            field("om", "OM responsável");
+  const profileFields = {
+    civil: field("name", "Nome completo") + field("identity", "Identidade") +
+      field("phone", "Telefone", null, true, "tel"),
+    external: field("rank", "Posto / graduação", ranks) +
+      field("name", "Nome completo") + field("warName", "Nome de guerra") +
+      field("om", "OM de origem") + field("identity", "Identidade") +
+      field("phone", "Telefone para contato", null, true, "tel"),
+    internal: field("rank", "Posto / graduação", ranks) +
+      field("warName", "Nome de guerra") + field("section", "Seção / subunidade"),
+    vehicle: field("plate", "Placa") + field("model", "Modelo / tipo de viatura") +
+      field("om", "OM responsável"),
+  };
+  $("keyFields").innerHTML = profileFields[t];
+  $("profileFields").innerHTML = "";
   $("profileSection")
     .querySelectorAll("input")
     .forEach((el) => {
@@ -686,43 +708,56 @@ function dismissMatch() {
   clearMatch();
   anchor?.focus();
 }
+function flowFields(tipo, data = {}, dateName = "visitDate", timeName = "visitTime") {
+  const now = nowFields();
+  let fields = field("direction", "Entrada ou saída", directions, true, "text", data.direction || "Entrada") +
+    field(dateName, "Data", null, true, "date", data[dateName] || now.day) +
+    field(timeName, "Horário", null, true, "time", data[timeName] || now.time) +
+    field("destination", "Destino", null, true, "text", data.destination);
+  if (tipo === "vehicle") {
+    fields += field("driverRank", "Posto / graduação do motorista", ranks.driver, true, "text", data.driverRank) +
+      field("driverWarName", "Nome de guerra do motorista", null, true, "text", data.driverWarName) +
+      field("vehicleChief", "Chefe da viatura", null, true, "text", data.vehicleChief) +
+      field("odometerInitial", "Odômetro inicial", null, true, "text", data.odometerInitial) +
+      field("odometerFinal", "Odômetro final", null, true, "text", data.odometerFinal);
+  } else {
+    fields += field("vehiclePlate", "Placa do veículo", null, false, "text", data.vehiclePlate === "N/A" ? "" : data.vehiclePlate);
+    if (tipo === "civil" || tipo === "external")
+      fields += `<label class="full">Motivo <span class="optional">(opcional)</span><textarea name="purpose" rows="2" maxlength="1000" placeholder="Informe o motivo, se necessário">${esc(data.purpose)}</textarea></label>`;
+  }
+  return fields;
+}
+function updateOdometerFields(container) {
+  const direction = container.querySelector('[name="direction"]')?.value;
+  for (const [name, expected] of [["odometerInitial", "Saída"], ["odometerFinal", "Entrada"]]) {
+    const input = container.querySelector(`[name="${name}"]`);
+    if (!input) continue;
+    const active = direction === expected;
+    input.closest("label").hidden = !active;
+    input.disabled = !active;
+    input.required = active;
+  }
+}
+function bindFlowFields(container, dateName) {
+  container.querySelector(`[name="${dateName}"]`).max = dayKey();
+  const direction = container.querySelector('[name="direction"]');
+  if (direction) direction.onchange = () => updateOdometerFields(container);
+  updateOdometerFields(container);
+}
 function setupEntry() {
-  const t = selected.tipo,
-    now = nowFields();
-  let fields =
-    field("visitDate", "Data da movimentação", null, true, "date", now.day) +
-    field("visitTime", "Horário", null, true, "time", now.time);
-  if (t === "internal")
-    fields += field(
-      "direction",
-      "Movimentação",
-      ["Entrada no CPOR", "Saída do CPOR"],
-      true,
-      "text",
-      "Entrada no CPOR",
-    );
-  if (t === "vehicle") fields += field("driver", "Motorista (posto e nome)");
-  fields += field("destination", "Destino / seção");
-  if (t === "vehicle")
-    fields += field("passengers", "Passageiros", null, false);
-  if (t === "civil" || t === "external")
-    fields += field("contact", "Pessoa procurada", null, false);
-  $("visitFields").innerHTML = fields;
+  const t = selected.tipo;
+  $("visitFields").innerHTML = flowFields(t, { direction: t === "vehicle" ? "Saída" : "Entrada" });
+  bindFlowFields($("visitFields"), "visitDate");
   const existing = findOpen(selected);
   $("selectedSummary").innerHTML =
     `<span class="eyebrow">CADASTRO SELECIONADO</span><h2>${esc(label(t, selected.dados))}</h2><p>${types[t]}</p>${existing ? `<div class="open-warning"><strong>Há um acesso pendente desde ${date(existing.inicio)}.</strong><p>Encerre a anotação antes de registrar outro acesso.</p>${rowActions(existing)}</div>` : ""}`;
   $("entryHint").textContent = isMilitary(t)
     ? "O expediente normal não exige anotação. Em casos como pernoite seguido de expediente, a anotação pode ser finalizada sem registrar uma saída."
     : t === "civil"
-      ? "Registre a saída ao fim da visita."
-      : "Registre a saída da viatura e, depois, seu retorno.";
-  updateEntryButton();
-  if (form.elements.direction)
-    form.elements.direction.onchange = updateEntryButton;
-}
-function updateEntryButton() {
+      ? "Selecione entrada ou saída. Sem veículo, deixe a placa vazia: será registrada como N/A."
+      : "Na saída, informe o odômetro inicial. Na entrada, informe o odômetro final.";
   $("submit").textContent = "Registrar fluxo";
-  $("submit").disabled = !!findOpen(selected);
+  $("submit").disabled = !!existing;
 }
 function openForm(record = null) {
   clearMatch();
@@ -742,10 +777,13 @@ function openForm(record = null) {
   }
   setSection("profileSection", !record);
   setSection("entrySection", !!record);
+  if (record) updateOdometerFields($("visitFields"));
   $("saveOnly").hidden = !!record;
   $("formTitle").textContent = record ? "Registrar fluxo" : "Novo cadastro";
-  if (!record) $("submit").textContent = "Registrar fluxo";
-  $("cancel").textContent = record ? "Cadastros" : "Início";
+  if (!record) $("submit").textContent = "Salvar e registrar fluxo";
+  $("cancel").innerHTML = record
+    ? "Cadastros"
+    : '<span class="material-symbols-fill">home</span>';
   route(record ? "entry" : "profile");
 }
 function openEdit(c, actor) {
@@ -778,11 +816,23 @@ function statusLabel(m) {
   if (m.encerramento.tipo === "finalizacao") return "Anotação finalizada";
   return m.encerramento.tipo === "saida"
     ? "Saída registrada"
-    : "Retorno registrado";
+    : "Entrada registrada";
 }
 function rowActions(m) {
   if (!isOpen(m)) return '<span class="muted">—</span>';
-  return `<div class="row-actions"><button class="row-action" data-finish="${m.id}">${m.direction === "Saída" ? "Registrar retorno" : "Registrar saída"}</button>${isMilitary(m.tipo) ? `<button class="row-action finalize-action" data-finalize="${m.id}">Finalizar anotação</button>` : ""}</div>`;
+  return `
+          <div class="row-actions">
+            ${
+                isMilitary(m.tipo) ?
+              `
+                <button class="row-action finalize-action" data-finalize="${m.id}">Finalizar anotação</button>
+              ` : ""
+            }
+            <button class="row-action" data-finish="${m.id}">
+              ${m.direction === "Saída" ? "Registrar entrada" : "Registrar saída"}
+            </button>
+          </div>
+        `;
 }
 function statusHtml(m) {
   return `<span class="pill ${isOpen(m) ? "" : m.encerramento.tipo === "finalizacao" ? "finalized" : "closed"}">${statusLabel(m)}</span>`;
@@ -790,18 +840,25 @@ function statusHtml(m) {
 function endHtml(m) {
   if (isOpen(m)) return "—";
   const e = m.encerramento;
-  return `${date(e.em)}<small>${e.tipo === "finalizacao" ? "Finalização da anotação" : e.tipo === "saida" ? "Saída" : "Retorno"}</small>${e.motivo ? `<small class="wrap-note">${esc(e.motivo)}</small>` : ""}`;
+  return `${date(e.em)}<small>${e.tipo === "finalizacao" ? "Finalização da anotação" : e.tipo === "saida" ? "Saída" : "Entrada (retorno)"}</small>${e.motivo ? `<small class="wrap-note">${esc(e.motivo)}</small>` : ""}`;
 }
 function flowLabel(f) {
   return {
     entrada: "Entrada",
     saida: "Saída",
-    retorno: "Retorno",
+    retorno: "Entrada (retorno)",
     finalizacao: "Finalização",
   }[f.acao];
 }
 function shortDay(day) {
   return day.split("-").reverse().join("/");
+}
+function flowDetailHtml(f) {
+  if (f.tipo !== "vehicle") return `<small>Placa do veículo: ${esc(f.vehiclePlate || "N/A")}</small>`;
+  const reading = f.acao === "saida"
+    ? `Odômetro inicial: ${esc(f.odometerInitial)}`
+    : `Odômetro final: ${esc(f.odometerFinal)}`;
+  return `<small>Motorista: ${esc(f.driverRank)} ${esc(f.driverWarName)}</small><small>Chefe da viatura: ${esc(f.vehicleChief)}</small><small>${reading}</small>`;
 }
 function flowRow(f, compact = false, daily = false) {
   const m = movimentacoes.find((m) => m.id === f.movimentoId);
@@ -812,9 +869,26 @@ function flowRow(f, compact = false, daily = false) {
     ? `<small>Editado em ${date(f.atualizadoEm)}</small>`
     : "";
   const edit = canEditFlow(f)
-    ? `<button class="row-action edit-flow-action" data-edit-flow="${f.id}">Editar fluxo</button>`
+    ? `<button class="row-action edit-flow-action" data-edit-flow="${f.id}"><span class="material-symbols-rounded">edit_note</span></button>`
     : "";
-  return `<tr><td><strong>${esc(label(f.tipo, f.dados))}</strong><small>${types[f.tipo]} · Acesso #${f.movimentoId} · Fluxo #${f.id}</small></td><td>${timing}<small class="flow-kind">${flowLabel(f)}${f.retroativo ? " · Retroativo" : ""}</small>${edited}</td><td class="wrap-note">${esc(f.motivo || f.purpose)}<small>${esc(f.destination)}</small>${!compact && f.notes ? `<small>${esc(f.notes)}</small>` : ""}</td><td>${statusHtml(m)}</td><td>${rowActions(m)}${edit}</td></tr>`;
+  return `
+          <tr>
+            <td>
+              <strong>${esc(label(f.tipo, f.dados))}</strong>
+              <small>${types[f.tipo]} · Acesso #${f.movimentoId} · Fluxo #${f.id}</small>
+            </td>
+            <td>${timing}
+              <small class="flow-kind">${flowLabel(f)}${f.retroativo ? " · Retroativo" : ""}</small>
+              ${edited}
+            </td>
+            <td class="wrap-note">${esc(f.motivo || f.purpose)}
+              <small>${esc(f.destination)}</small>
+              ${!compact && f.acao !== "finalizacao" ? flowDetailHtml(f) : ""}
+            </td>
+            <td>${statusHtml(m)}</td>
+            <td class="actions">${rowActions(m)}${edit}</td>
+          </tr>
+        `;
 }
 function renderRecent() {
   const recent = fluxos
@@ -834,7 +908,7 @@ function render() {
     (m) => m.tipo !== "vehicle" && isOpen(m),
   ).length;
   $("vehicles").textContent = movimentacoes.filter(
-    (m) => m.tipo === "vehicle" && isOpen(m),
+    (m) => m.tipo === "vehicle" && m.direction === "Saída" && isOpen(m),
   ).length;
   $("total").textContent = fluxos.length;
   $("registered").textContent = cadastros.filter(isActive).length;
@@ -893,11 +967,7 @@ function render() {
       const matches =
         !q ||
         norm(
-          Object.values(r.dados).join(" ") +
-            " " +
-            (r.purpose || "") +
-            " " +
-            (r.destination || ""),
+          [...Object.values(r.dados), ...flowDetailKeys.map((key) => r[key] || "")].join(" "),
         ).includes(q) ||
         (docNorm(q) && docNorm(r.chave).includes(docNorm(q)));
       const m = isReg
@@ -944,7 +1014,7 @@ function render() {
       ? "Organizados pela data da ocorrência. Edite fluxos ocorridos ou registrados hoje."
       : "Mais recentes pelo lançamento, com a data da ocorrência e a ficha correspondente.";
   $("thead").innerHTML =
-    `<tr>${(isReg ? ["Identificação", "Categoria", "Acesso", "Ações"] : ["Identificação", isDaily ? "Ocorrência / fluxo" : "Registrado em / fluxo", "Objetivo / destino", "Acesso atual", "Ações"]).map((x) => `<th>${x}</th>`).join("")}</tr>`;
+    `<tr>${(isReg ? ["Identificação", "Categoria", "Acesso", "Ações"] : ["Identificação", isDaily ? "Ocorrência / fluxo" : "Registrado em / fluxo", "Motivo / destino", "Acesso atual", "Ações"]).map((x) => `<th>${x}</th>`).join("")}</tr>`;
   $("tbody").innerHTML = rows
     .map((r) =>
       isReg
@@ -956,11 +1026,11 @@ function render() {
               </td>
             <td>${types[r.tipo]}</td>
             <td>${findOpen(r) ? "Pendente" : "Sem pendência"}</td>
-            <td>
+            <td class="actions">
               <div class="registry-actions">
                 <button class="row-action" data-reuse="${cadastros.indexOf(r)}">${findOpen(r) ? "Ver acesso" : "Registrar fluxo"}</button>
-                <button class="row-action" data-edit="${cadastros.indexOf(r)}">Editar</button>
-                <button class="row-action danger-link" data-delete="${cadastros.indexOf(r)}">Excluir</button>
+                <button class="row-action" data-edit="${cadastros.indexOf(r)}"><span class="material-symbols-rounded">person_edit</span></button>
+                <button class="row-action danger-link" data-delete="${cadastros.indexOf(r)}"><span class="material-symbols-rounded">delete_forever</span></button>
               </div>
           </td>
         </tr>
@@ -999,11 +1069,15 @@ const auditFieldNames = {
   model: "Modelo",
   em: "Ocorrência",
   dia: "Ficha",
-  purpose: "Objetivo / motivo",
+  direction: "Entrada ou saída",
+  purpose: "Motivo",
   destination: "Destino",
-  contact: "Pessoa de contato",
-  driver: "Motorista",
-  passengers: "Passageiros / carga",
+  vehiclePlate: "Placa do veículo",
+  driverRank: "Posto / graduação do motorista",
+  driverWarName: "Nome de guerra do motorista",
+  vehicleChief: "Chefe da viatura",
+  odometerInitial: "Odômetro inicial",
+  odometerFinal: "Odômetro final",
   motivo: "Motivo da finalização",
 };
 function auditDetails(log) {
@@ -1012,16 +1086,7 @@ function auditDetails(log) {
   const before = flow ? log.antes : log.antes.dados,
     after = flow ? log.depois : log.depois.dados;
   const keys = flow
-    ? [
-        "em",
-        "dia",
-        "purpose",
-        "destination",
-        "contact",
-        "driver",
-        "passengers",
-        "motivo",
-      ]
+    ? ["em", "dia", "direction", ...flowDetailKeys, "motivo"]
     : Object.keys(after);
   const changes = keys.filter((k) => before[k] !== after[k]);
   const value = (key, v) =>
@@ -1092,7 +1157,7 @@ function requestResponsible(action, target) {
   form.reset();
   form.elements.actorRank.innerHTML =
     '<option value="">Selecione</option>' +
-    ranks.map((r) => `<option>${esc(r)}</option>`).join("");
+    ranks.driver.map((r) => `<option>${esc(r)}</option>`).join("");
   $("responsibleTitle").textContent =
     action === "delete"
       ? "Excluir cadastro"
@@ -1114,54 +1179,21 @@ function requestResponsible(action, target) {
 function openFlowEdit(flow, actor) {
   if (!canEditFlow(flow)) throw Error("Este fluxo não pode mais ser editado.");
   editingFlow = { id: flow.id, actor: validateOperator(actor) };
-  const f = $("editFlowForm"),
-    initial = isInitialFlow(flow);
-  const local = new Date(
-    new Date(flow.em).getTime() - 3 * 3600000,
-  ).toISOString();
+  const f = $("editFlowForm");
+  const local = new Date(new Date(flow.em).getTime() - 3 * 3600000).toISOString();
+  const finalization = flow.acao === "finalizacao";
   f.reset();
-  $("editFlowName").textContent =
-    `${label(flow.tipo, flow.dados)} · ${flowLabel(flow)} #${flow.id}`;
+  $("editFlowName").textContent = `${label(flow.tipo, flow.dados)} · ${flowLabel(flow)} #${flow.id}`;
   $("editFlowHint").textContent =
     `Responsável: ${actor.posto} ${actor.nomeGuerra}. Lançado em ${date(flow.registradoEm)}. Ao alterar a data, o fluxo vai para a ficha correspondente.`;
-  let fields =
-    field("flowDate", "Data", null, true, "date", local.slice(0, 10)) +
-    field("flowTime", "Horário", null, true, "time", local.slice(11, 16));
-  if (initial) {
-    fields += field(
-      "destination",
-      flow.tipo === "vehicle" ? "Destino / itinerário" : "Destino",
-      null,
-      true,
-      "text",
-      flow.destination,
-    );
-    fields +=
-      flow.tipo === "vehicle"
-        ? field("driver", "Motorista", null, true, "text", flow.driver) +
-          field(
-            "passengers",
-            "Passageiros / carga",
-            null,
-            false,
-            "text",
-            flow.passengers,
-          )
-        : field(
-            "contact",
-            "Pessoa de contato",
-            null,
-            false,
-            "text",
-            flow.contact,
-          );
-  }
-  $("editFlowFields").innerHTML = fields;
-  f.elements.flowDate.max = dayKey();
-  $("editPurposeLabel").hidden = !initial;
-  f.elements.purpose.disabled = !initial;
-  f.elements.purpose.value = flow.purpose || "";
-  const finalization = !initial && flow.acao === "finalizacao";
+  $("editFlowFields").innerHTML = finalization
+    ? field("flowDate", "Data", null, true, "date", local.slice(0, 10)) +
+      field("flowTime", "Horário", null, true, "time", local.slice(11, 16))
+    : flowFields(flow.tipo, {
+        ...flow, direction: directionFor(flow),
+        flowDate: local.slice(0, 10), flowTime: local.slice(11, 16),
+      }, "flowDate", "flowTime");
+  bindFlowFields($("editFlowFields"), "flowDate");
   $("editReasonLabel").hidden = !finalization;
   f.elements.reason.disabled = !finalization;
   f.elements.reason.value = flow.motivo || "";
@@ -1223,17 +1255,27 @@ function openFinish(id, mode) {
     now = nowFields(),
     finalize = mode === "finalize";
   f.reset();
-  f.elements.endDate.value = now.day;
-  f.elements.endTime.value = now.time;
+  $("finishFields").innerHTML = finalize
+    ? field("endDate", "Data", null, true, "date", now.day) +
+      field("endTime", "Horário", null, true, "time", now.time)
+    : flowFields(m.tipo, {
+        ...m, direction: oppositeDirection(m.direction),
+        endDate: now.day, endTime: now.time,
+        odometerInitial: "", odometerFinal: "",
+      }, "endDate", "endTime");
+  bindFlowFields($("finishFields"), "endDate");
+  if (!finalize) {
+    // Um acesso pendente é encerrado pelo movimento no sentido oposto.
+    const direction = f.elements.direction;
+    direction.innerHTML = `<option>${esc(oppositeDirection(m.direction))}</option>`;
+  }
   $("finishTitle").textContent = finalize
     ? "Finalizar anotação"
-    : m.direction === "Saída"
-      ? "Registrar retorno"
-      : "Registrar saída";
+    : m.direction === "Saída" ? "Registrar entrada" : "Registrar saída";
   $("finishName").textContent = label(m.tipo, m.dados);
   $("finishHelp").textContent = finalize
-    ? "Encerra somente a anotação. Nenhum horário de saída ou retorno será registrado. O motivo é opcional."
-    : "Informe a data e o horário em que a movimentação realmente ocorreu.";
+    ? "Encerra somente a anotação. Nenhum horário de saída ou entrada será registrado. O motivo é opcional."
+    : "Confira os dados e informe quando esta entrada ou saída realmente ocorreu.";
   $("reasonLabel").hidden = !finalize;
   f.elements.endReason.disabled = !finalize;
   f.elements.endReason.required = false;
@@ -1523,6 +1565,7 @@ $("finishForm").onsubmit = (e) => {
       f.endDate.value,
       f.endTime.value,
       f.endReason.value,
+      Object.fromEntries(new FormData($("finishForm"))),
     );
     $("finishDialog").close();
     render();
@@ -1532,7 +1575,7 @@ $("finishForm").onsubmit = (e) => {
         ? "Anotação finalizada sem saída ou retorno."
         : m.encerramento.tipo === "saida"
           ? "Saída registrada."
-          : "Retorno registrado.",
+          : "Entrada registrada.",
     );
   } catch (err) {
     $("finishError").textContent = err.message;
