@@ -1425,22 +1425,18 @@ $("historyMode").onchange = () => {
   resetFilters();
   route($("historyMode").value);
 };
-$("dayFilter").onchange = render;
 $("todayBtn").onclick = () => {
   $("dayFilter").value = dayKey();
-  render();
 };
 $("prevDay").onclick = () => {
   const d = new Date(`${$("dayFilter").value}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() - 1);
   $("dayFilter").value = d.toISOString().slice(0, 10);
-  render();
 };
 $("nextDay").onclick = () => {
   const d = nextDay($("dayFilter").value);
   if (d <= dayKey()) {
     $("dayFilter").value = d;
-    render();
   }
 };
 $("viewPending").onclick = () => {

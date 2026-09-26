@@ -209,6 +209,7 @@ p {
     border-radius: 6px;
     font-size: 12px;
     color: #657458;
+    margin-bottom: 20px;
 }
 .notice > span {
     border: 1px solid #89977c;
