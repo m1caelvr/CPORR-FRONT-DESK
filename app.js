@@ -320,28 +320,76 @@ const directionFor = (flow) => flow.acao === "saida" ? "Saída" : "Entrada";
 const oppositeDirection = (direction) => direction === "Saída" ? "Entrada" : "Saída";
 const closingKind = (direction) => direction === "Saída" ? "saida" : "retorno";
 
+function odometerValue(value) {
+  const raw = trim(value).replace(/\s/g, "");
+  const normalized = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : raw;
+
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : NaN;
+}
+
+function validateOdometerPair(initial, final) {
+  const initialValue = odometerValue(initial);
+  const finalValue = odometerValue(final);
+
+  if (!Number.isFinite(initialValue) || !Number.isFinite(finalValue))
+    throw Error("Informe valores válidos para o odômetro.");
+  if (finalValue < initialValue)
+    throw Error("O odômetro final não pode ser menor que o odômetro inicial.");
+}
+
 function validateFlowData(tipo, data) {
   if (!directions.includes(data.direction))
     throw Error("Selecione entrada ou saída.");
+
   const details = flowDetails({ destination: data.destination });
-  if (!details.destination) throw Error("Informe o destino.");
+
   if (tipo === "vehicle") {
+    if (data.direction === "Saída" && !details.destination)
+      throw Error("Informe o destino.");
+
+    if (data.direction === "Entrada")
+      details.destination = "";
+
     if (!ranks.includes(data.driverRank))
       throw Error("Informe o posto / graduação do motorista.");
-    if (!trim(data.driverWarName)) throw Error("Informe o nome de guerra do motorista.");
-    if (!trim(data.vehicleChief)) throw Error("Informe o chefe da viatura.");
+
+    if (!trim(data.driverWarName))
+      throw Error("Informe o nome de guerra do motorista.");
+
+    if (!trim(data.vehicleChief))
+      throw Error("Informe o chefe da viatura.");
+
     details.driverRank = data.driverRank;
     details.driverWarName = trim(data.driverWarName);
     details.vehicleChief = trim(data.vehicleChief);
-    const odometer = data.direction === "Saída" ? "odometerInitial" : "odometerFinal";
+
+    const odometer =
+      data.direction === "Saída" ? "odometerInitial" : "odometerFinal";
+
     if (!trim(data[odometer]))
-      throw Error(`Informe o odômetro ${data.direction === "Saída" ? "inicial" : "final"}.`);
-    // Preserva a leitura como texto, inclusive separadores e casas decimais.
+      throw Error(
+        `Informe o odômetro ${
+          data.direction === "Saída" ? "inicial" : "final"
+        }.`
+      );
+
+    if (!Number.isFinite(odometerValue(data[odometer])))
+      throw Error("Informe um valor válido para o odômetro.");
+
     details[odometer] = trim(data[odometer]);
   } else {
+    if (!details.destination)
+      throw Error("Informe o destino.");
+
     details.vehiclePlate = trim(data.vehiclePlate) || "N/A";
-    if (tipo === "civil" || tipo === "external") details.purpose = trim(data.purpose);
+
+    if (tipo === "civil" || tipo === "external")
+      details.purpose = trim(data.purpose);
   }
+
   return { ...details, direction: data.direction };
 }
 
@@ -383,6 +431,17 @@ function closeMovement(id, mode, day, time, reason = "", data = {}) {
     if (data.direction !== oppositeDirection(m.direction))
       throw Error("Selecione o sentido oposto ao fluxo que abriu este acesso.");
     details = validateFlowData(m.tipo, data);
+
+    if (
+      m.tipo === "vehicle" &&
+      m.direction === "Saída" &&
+      details.direction === "Entrada"
+    ) {
+      validateOdometerPair(
+        m.odometerInitial,
+        details.odometerFinal
+      );
+    }
   }
   const tipo = mode === "finalize" ? "finalizacao" : closingKind(details.direction);
   m.encerramento = {
@@ -729,13 +788,34 @@ function flowFields(tipo, data = {}, dateName = "visitDate", timeName = "visitTi
 }
 function updateOdometerFields(container) {
   const direction = container.querySelector('[name="direction"]')?.value;
-  for (const [name, expected] of [["odometerInitial", "Saída"], ["odometerFinal", "Entrada"]]) {
+
+  for (const [name, expected] of [
+    ["odometerInitial", "Saída"],
+    ["odometerFinal", "Entrada"],
+  ]) {
     const input = container.querySelector(`[name="${name}"]`);
+
     if (!input) continue;
+
     const active = direction === expected;
+
     input.closest("label").hidden = !active;
     input.disabled = !active;
     input.required = active;
+  }
+
+  const isVehicle = !!container.querySelector('[name="odometerInitial"]');
+  const destination = container.querySelector('[name="destination"]');
+
+  if (isVehicle && destination) {
+    const active = direction === "Saída";
+
+    destination.closest("label").hidden = !active;
+    destination.disabled = !active;
+    destination.required = active;
+
+    if (!active)
+      destination.value = "";
   }
 }
 function bindFlowFields(container, dateName) {
@@ -750,7 +830,18 @@ function setupEntry() {
   bindFlowFields($("visitFields"), "visitDate");
   const existing = findOpen(selected);
   $("selectedSummary").innerHTML =
-    `<span class="eyebrow">CADASTRO SELECIONADO</span><h2>${esc(label(t, selected.dados))}</h2><p>${types[t]}</p>${existing ? `<div class="open-warning"><strong>Há um acesso pendente desde ${date(existing.inicio)}.</strong><p>Encerre a anotação antes de registrar outro acesso.</p>${rowActions(existing)}</div>` : ""}`;
+  `
+    <span class="eyebrow">CADASTRO SELECIONADO</span>
+    <h2>${esc(label(t, selected.dados))}</h2>
+    <p>${types[t]}</p>
+    ${existing ?
+  `
+  <div class="open-warning">
+    <strong>Há um acesso pendente desde ${date(existing.inicio)}.</strong>
+    <p>Encerre a anotação antes de registrar outro acesso.</p>
+    ${rowActions(existing, "")}
+  </div>
+  ` : ""}`;
   $("entryHint").textContent = isMilitary(t)
     ? "O expediente normal não exige anotação. Em casos como pernoite seguido de expediente, a anotação pode ser finalizada sem registrar uma saída."
     : t === "civil"
@@ -818,8 +909,8 @@ function statusLabel(m) {
     ? "Saída registrada"
     : "Entrada registrada";
 }
-function rowActions(m) {
-  if (!isOpen(m)) return '<span class="muted">—</span>';
+function rowActions(m, edit = "") {
+  if (!isOpen(m)) return "";
   return `
           <div class="row-actions">
             ${
@@ -831,6 +922,7 @@ function rowActions(m) {
             <button class="row-action" data-finish="${m.id}">
               ${m.direction === "Saída" ? "Registrar entrada" : "Registrar saída"}
             </button>
+            ${edit}
           </div>
         `;
 }
@@ -858,7 +950,11 @@ function flowDetailHtml(f) {
   const reading = f.acao === "saida"
     ? `Odômetro inicial: ${esc(f.odometerInitial)}`
     : `Odômetro final: ${esc(f.odometerFinal)}`;
-  return `<small>Motorista: ${esc(f.driverRank)} ${esc(f.driverWarName)}</small><small>Chefe da viatura: ${esc(f.vehicleChief)}</small><small>${reading}</small>`;
+  return `
+          <small>Motorista: ${esc(f.driverRank)} ${esc(f.driverWarName)}</small>
+          <small>Chefe da viatura: ${esc(f.vehicleChief)}</small>
+          <small>${reading}</small>
+         `;
 }
 function flowRow(f, compact = false, daily = false) {
   const m = movimentacoes.find((m) => m.id === f.movimentoId);
@@ -886,10 +982,11 @@ function flowRow(f, compact = false, daily = false) {
               ${!compact && f.acao !== "finalizacao" ? flowDetailHtml(f) : ""}
             </td>
             <td>${statusHtml(m)}</td>
-            <td class="actions">${rowActions(m)}${edit}</td>
+            <td class="actions">${rowActions(m, edit)}</td>
           </tr>
         `;
 }
+// 123
 function renderRecent() {
   const recent = fluxos
     .slice()
@@ -904,14 +1001,7 @@ function renderRecent() {
 function render() {
   syncSheets();
   const today = dayKey();
-  $("inside").textContent = movimentacoes.filter(
-    (m) => m.tipo !== "vehicle" && isOpen(m),
-  ).length;
-  $("vehicles").textContent = movimentacoes.filter(
-    (m) => m.tipo === "vehicle" && m.direction === "Saída" && isOpen(m),
-  ).length;
-  $("total").textContent = fluxos.length;
-  $("registered").textContent = cadastros.filter(isActive).length;
+
   $("homeSheetDate").textContent = shortDay(today);
   $("homeSheetCount").textContent = `${flowsForDay(today).length} fluxos hoje`;
   renderRecent();
@@ -1432,12 +1522,14 @@ $("prevDay").onclick = () => {
   const d = new Date(`${$("dayFilter").value}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() - 1);
   $("dayFilter").value = d.toISOString().slice(0, 10);
+  render();
 };
 $("nextDay").onclick = () => {
   const d = nextDay($("dayFilter").value);
   if (d <= dayKey()) {
     $("dayFilter").value = d;
   }
+  render();
 };
 $("viewPending").onclick = () => {
   resetFilters();
