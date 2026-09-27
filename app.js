@@ -653,6 +653,137 @@ function setupProfile() {
     });
   $("error").textContent = "";
 }
+function flowCandidateLabel(cadastro) {
+  const { tipo, dados } = cadastro;
+
+  const detalhe =
+    tipo === "internal"
+      ? dados.section
+      : tipo === "external"
+        ? dados.om
+        : tipo === "vehicle"
+          ? dados.model
+          : "Civil";
+
+  return `${label(tipo, dados)} (${detalhe || types[tipo]})`;
+}
+
+function setupFlowLookup() {
+  const tipo = $("type").value;
+
+  $("keyHint").textContent =
+    tipo === "internal"
+      ? "Informe posto/graduação e nome de guerra."
+      : tipo === "vehicle"
+        ? "Informe a placa da viatura."
+        : "Informe a identidade da pessoa.";
+
+  $("keyFields").innerHTML =
+    tipo === "internal"
+      ? field("rank", "Posto / graduação", ranks) +
+        field("warName", "Nome de guerra")
+      : tipo === "vehicle"
+        ? field("plate", "Placa")
+        : field("identity", "Identidade");
+
+  $("profileFields").innerHTML = "";
+  $("flowLookupResult").innerHTML = "";
+  $("flowLookupResult").hidden = true;
+  $("error").textContent = "";
+}
+
+function renderFlowLookup() {
+  const dados = Object.fromEntries(new FormData(form));
+  const resultado = $("flowLookupResult");
+
+  if (!keyReady(dados.type, dados)) {
+    resultado.innerHTML = "";
+    resultado.hidden = true;
+    return;
+  }
+
+  const cadastro = findExisting(dados.type, dados);
+  const viatura = dados.type === "vehicle";
+
+  resultado.innerHTML = cadastro
+    ? `
+      <strong>${esc(flowCandidateLabel(cadastro))}</strong>
+      <p>
+        ${viatura ? "É esta viatura?" : "É esta pessoa?"}
+        Confira antes de registrar o fluxo.
+      </p>
+      <button type="button" class="primary" id="confirmFlowLookup">
+        Sim, registrar fluxo
+      </button>
+    `
+    : `
+      <strong>${viatura ? "Viatura" : "Pessoa"} não cadastrada.</strong>
+      <p>
+        Para registrar o fluxo, cadastre
+        ${viatura ? "a viatura" : "a pessoa"} primeiro.
+      </p>
+      <button type="button" class="secondary" id="createFromFlow">
+        ${viatura ? "Cadastrar viatura" : "Cadastrar pessoa"}
+      </button>
+    `;
+
+  resultado.hidden = false;
+}
+
+function openFlowLookup() {
+  clearMatch();
+
+  selected = null;
+  editing = null;
+  editActor = null;
+  stage = "lookup";
+
+  form.reset();
+  $("type").value = "civil";
+
+  setSection("profileSection", true);
+  setSection("entrySection", false);
+
+  $("type").disabled = false;
+  $("formTitle").textContent = "Novo fluxo";
+  $("saveOnly").hidden = true;
+  $("submit").disabled = false;
+  $("submit").textContent = "Buscar cadastro";
+  $("profileSaveHint").hidden = true;
+  $("cancel").textContent = "Voltar";
+
+  setupFlowLookup();
+  route("profile");
+}
+
+function confirmFlowLookup() {
+  if (stage !== "lookup") return;
+
+  const dados = Object.fromEntries(new FormData(form));
+  const cadastro = findExisting(dados.type, dados);
+
+  if (cadastro) openForm(cadastro);
+  else renderFlowLookup();
+}
+
+function registerFromFlow() {
+  if (stage !== "lookup") return;
+
+  const dados = Object.fromEntries(new FormData(form));
+
+  if (!keyReady(dados.type, dados) || findExisting(dados.type, dados)) {
+    renderFlowLookup();
+    return;
+  }
+
+  openForm();
+  $("type").value = dados.type;
+  setupProfile();
+
+  for (const nome of keyNames(dados.type)) {
+    form.elements[nome].value = dados[nome] || "";
+  }
+}
 function clearMatch() {
   if (matchAnchor) matchAnchor.setAttribute("aria-expanded", "false");
   $("matchPanel").hidden = true;
@@ -690,10 +821,28 @@ function positionMatch() {
     `${Math.max(18, Math.min(panelWidth - 18, box.left + Math.min(box.width / 2, 45) - left))}px`,
   );
 }
+
 function lookup(eventOrInput) {
+  // Consulta usada na tela "Novo fluxo".
+  if (stage === "lookup" && page === "profile") {
+    const dados = Object.fromEntries(new FormData(form));
+    const cadastro = findExisting(dados.type, dados);
+
+    if (eventOrInput?.type === "input" && !cadastro) {
+      $("flowLookupResult").hidden = true;
+    } else {
+      renderFlowLookup();
+    }
+
+    return [];
+  }
+
   if (!["profile", "edit"].includes(stage) || page !== "profile") return [];
+
   let input = eventOrInput?.target || eventOrInput;
+
   if (input?.name === "rank") input = form.elements.warName;
+
   if (
     !input ||
     !["name", "warName", "identity", "plate", "phone"].includes(input.name)
@@ -701,41 +850,83 @@ function lookup(eventOrInput) {
     clearMatch();
     return [];
   }
+
   const candidates = suggestProfiles(
     editing?.tipo || $("type").value,
     input.name,
     input.value,
     editing,
   );
+
   clearMatch();
   if (!candidates.length) return [];
+
   matchAnchor = input;
   matchCandidates = candidates;
   input.setAttribute("aria-expanded", "true");
+
   const vehicle = (editing?.tipo || $("type").value) === "vehicle";
-  $("matchTitle").textContent = vehicle ? "É esta viatura?" : "É esta pessoa?";
+
+  $("matchTitle").textContent = vehicle
+    ? "É esta viatura?"
+    : "É esta pessoa?";
+
   $("matchCount").textContent =
-    `${candidates.length} ${candidates.length === 1 ? "cadastro encontrado" : "cadastros encontrados"}`;
+    `${candidates.length} ${
+      candidates.length === 1
+        ? "cadastro encontrado"
+        : "cadastros encontrados"
+    }`;
+
   $("matchHelp").textContent =
     stage === "edit"
       ? "Outra pessoa já cadastrada. Confira a identificação antes de salvar."
       : "Selecione para preencher os dados.";
+
   $("matchList").innerHTML = candidates
     .map((c, i) => {
       const details = [
         c.dados.identity ? `Identidade: ${c.dados.identity}` : "",
         c.dados.phone ? `Telefone: ${c.dados.phone}` : "",
-        c.dados.om || c.dados.section || c.dados.model || "",
+        c.dados.model || c.dados.om || c.dados.section || "",
       ]
         .filter(Boolean)
         .join(" · ");
-      return `<button type="button" class="match-choice" data-candidate="${i}"><strong>${esc(label(c.tipo, c.dados))}</strong>${c.dados.name && c.dados.name !== label(c.tipo, c.dados) ? `<span>${esc(c.dados.name)}</span>` : ""}<small>${esc(details)}</small><span class="match-pick">${stage === "edit" ? "Conferir este cadastro" : "Sim, é este cadastro"} →</span></button>`;
+
+      return `
+        <button
+          type="button"
+          class="match-choice"
+          data-candidate="${i}"
+        >
+          <strong>${esc(label(c.tipo, c.dados))}</strong>
+
+          ${
+            c.dados.name && c.dados.name !== label(c.tipo, c.dados)
+              ? `<span>${esc(c.dados.name)}</span>`
+              : ""
+          }
+
+          <small>${esc(details)}</small>
+
+          <span class="match-pick">
+            ${
+              stage === "edit"
+                ? "Conferir este cadastro"
+                : "Sim, é este cadastro"
+            } →
+          </span>
+        </button>
+      `;
     })
     .join("");
+
   $("matchPanel").hidden = false;
   positionMatch();
+
   return candidates;
 }
+
 function confirmMatch(index) {
   const c = matchCandidates[index],
     anchor = matchAnchor;
@@ -870,6 +1061,8 @@ function openForm(record = null) {
   setSection("entrySection", !!record);
   if (record) updateOdometerFields($("visitFields"));
   $("saveOnly").hidden = !!record;
+  $("flowLookupResult").hidden = true;
+  $("profileSaveHint").hidden = false;
   $("formTitle").textContent = record ? "Registrar fluxo" : "Novo cadastro";
   if (!record) $("submit").textContent = "Salvar e registrar fluxo";
   $("cancel").innerHTML = record
@@ -894,6 +1087,8 @@ function openEdit(c, actor) {
   for (const [name, value] of Object.entries(c.dados))
     if (form.elements[name]) form.elements[name].value = value;
   $("saveOnly").hidden = true;
+  $("flowLookupResult").hidden = true;
+  $("profileSaveHint").hidden = false;
   $("submit").disabled = false;
   $("submit").textContent = "Salvar alterações";
   $("formTitle").textContent = "Editar cadastro";
@@ -1310,7 +1505,7 @@ function showPage(next) {
     daily: "Ficha diária",
     registry: "Cadastros",
     audit: "Alterações",
-    profile: "Cadastros",
+    profile: stage === "lookup" ? "Fluxos" : "Cadastros",
     entry: "Fluxos",
   };
   $("navCurrent").textContent = names[page] || "Início";
@@ -1497,10 +1692,16 @@ $("startNew").onclick =
   $("newBtn").onclick =
   $("emptyNew").onclick =
     () => openForm();
-$("startSearch").onclick = () => {
-  resetFilters();
-  route("registry");
-  $("search").focus();
+$("startSearch").onclick = openFlowLookup;
+
+$("flowLookupResult").onclick = (event) => {
+  if (event.target.closest("#confirmFlowLookup")) {
+    confirmFlowLookup();
+  }
+
+  if (event.target.closest("#createFromFlow")) {
+    registerFromFlow();
+  }
 };
 $("viewAll").onclick = () => {
   resetFilters();
@@ -1540,11 +1741,15 @@ $("close").onclick = $("cancel").onclick = () =>
   route(stage === "entry" || stage === "edit" ? "registry" : "home");
 $("type").onchange = () => {
   clearMatch();
-  setupProfile();
+
+  if (stage === "lookup") setupFlowLookup();
+  else setupProfile();
 };
 $("profileSection").addEventListener("input", lookup);
-$("profileSection").addEventListener("change", (e) => {
-  if (e.target.name === "rank") lookup(e);
+$("profileSection").addEventListener("change", (event) => {
+  if (stage === "lookup" || event.target.name === "rank") {
+    lookup(event);
+  }
 });
 $("matchList").onclick = (e) => {
   const b = e.target.closest("[data-candidate]");
@@ -1600,6 +1805,10 @@ form.onsubmit = (e) => {
   e.preventDefault();
   try {
     const d = Object.fromEntries(new FormData(form));
+    if (stage === "lookup") {
+      renderFlowLookup();
+      return;
+    }
     if (stage === "edit") {
       saveProfile({ ...d, type: editing.tipo }, editing, editActor);
       editActor = null;
@@ -1677,7 +1886,7 @@ window.addEventListener("hashchange", () => {
   }
   if (
     next === "profile" &&
-    (!["profile", "edit"].includes(stage) || (stage === "edit" && !editActor))
+    (!["profile", "edit", "lookup"].includes(stage) || (stage === "edit" && !editActor))
   ) {
     openForm();
     return;
@@ -1780,3 +1989,93 @@ if (document.modelContext?.registerTool) {
     ).catch(() => {});
   } catch {}
 }
+
+(() => {
+  const status = document.getElementById("connectionStatus");
+  let activeRequest = null;
+
+  function setStatus(state) {
+    status.dataset.state = state;
+
+    status.textContent = {
+      online: "Online",
+      connecting: "Conectando...",
+      offline: "Offline",
+    }[state];
+  }
+
+  function markOffline() {
+    const request = activeRequest;
+    activeRequest = null;
+    request?.abort();
+    setStatus("offline");
+  }
+
+  async function checkConnection() {
+    if (!navigator.onLine) {
+      markOffline();
+      return;
+    }
+
+    // Ao abrir o HTML diretamente, usa o estado informado pelo navegador.
+    if (location.protocol === "file:") {
+      setStatus("online");
+      return;
+    }
+
+    if (activeRequest) return;
+
+    // Evita piscar "Conectando" em cada verificação quando já está online.
+    if (status.dataset.state !== "online") {
+      setStatus("connecting");
+    }
+
+    const controller = new AbortController();
+    activeRequest = controller;
+
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const url = new URL("./index.html", location.href);
+      url.searchParams.set("_connection", Date.now());
+
+      const response = await fetch(url, {
+        method: "HEAD",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      // Ignora respostas de uma verificação cancelada.
+      if (activeRequest !== controller) return;
+
+      setStatus(
+        response.ok && navigator.onLine
+          ? "online"
+          : "offline"
+      );
+    } catch {
+      if (activeRequest === controller) {
+        setStatus("offline");
+      }
+    } finally {
+      clearTimeout(timeout);
+
+      if (activeRequest === controller) {
+        activeRequest = null;
+      }
+    }
+  }
+
+  window.addEventListener("online", checkConnection);
+  window.addEventListener("offline", markOffline);
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) checkConnection();
+  });
+
+  setInterval(() => {
+    if (!document.hidden) checkConnection();
+  }, 10000);
+
+  checkConnection();
+})();

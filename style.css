@@ -188,6 +188,7 @@ p {
     background: var(--green);
     border: 1px solid var(--green);
     color: white;
+    transition: 0.3s;
 }
 .primary:hover {
     background: #143a2c;
@@ -196,6 +197,7 @@ p {
     background: white;
     border: 1px solid #d6dfd9;
     color: var(--ink);
+    transition: 0.3s;
 }
 .secondary:hover {
     background: #edf3ef;
@@ -716,6 +718,8 @@ label textarea {
     border-radius: 10px;
     padding: 30px;
     color: var(--ink);
+    transition: 0.3s;
+
 }
 .home-options button:hover {
     border-color: #759d85;
@@ -973,7 +977,7 @@ body:has(dialog[open]) {
 }
 .match-bubble {
     position: fixed;
-    z-index: 40;
+    z-index: 9;
     background: #fff;
     border: 1px solid #94b3a0;
     border-radius: 9px;
@@ -1032,6 +1036,7 @@ body:has(dialog[open]) {
     color: var(--ink);
     white-space: normal;
     overflow-wrap: anywhere;
+    transition: 0.3s;
 }
 .match-choice:hover,
 .match-choice:focus-visible {
@@ -1260,9 +1265,13 @@ body:has(dialog[open]) {
     margin: 2px 0;
     padding: 11px 9px;
 }
+#navOptions .nav:hover:not(.nav.active) {
+    background: #2b4c3fd0;
+}
 .danger-link {
     color: #993f34;
     border-color: #e1c4be;
+    transition: 0.3s;
 }
 .danger-link:hover {
     background: #fff0ed;
@@ -1275,6 +1284,7 @@ body:has(dialog[open]) {
     padding: 11px 18px;
     font-size: 14px;
     font-weight: 600;
+    transition: 0.3s;
 }
 .danger-button:hover {
     background: #803025;
@@ -1327,4 +1337,74 @@ body:has(dialog[open]) {
 #editFlowDialog {
     max-height: calc(100dvh - 32px);
     overflow: auto;
+}
+
+.flow-lookup-result {
+  margin: 18px 0;
+  padding: 17px;
+  border: 1px solid #ccdcd1;
+  border-radius: 8px;
+  background: #f0f5f2;
+  position: absolute;
+}
+
+.flow-lookup-result strong {
+  display: block;
+  font-size: 17px;
+}
+
+.flow-lookup-result p {
+  margin: 7px 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.flow-lookup-result button {
+  max-width: 100%;
+}
+.connection-status {
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.connection-status[data-state="online"] {
+  color: #15803d;
+}
+.connection-status[data-state="online"]:after {
+  content: " ●";
+  color: #15803d;
+  animation: pulse 1.5s infinite;
+  font-size: 13px;
+}
+
+.connection-status[data-state="connecting"] {
+  color: #a16207;
+}
+.connection-status[data-state="connecting"]:after {
+  content: " ●";
+  color: #a16207;
+  animation: pulse 1.5s infinite;
+  font-size: 13px;
+}
+
+.connection-status[data-state="offline"] {
+  color: #b91c1c;
+}
+.connection-status[data-state="offline"]:after {
+  content: " ●";
+  color: #b91c1c;
+  animation: pulse 1.5s infinite;
+  font-size: 13px;
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.5;
+  }
 }

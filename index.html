@@ -63,7 +63,16 @@
     </aside>
     <main>
       <header>
-        <div class="breadcrumb">CPOR / Registro de fluxos</div>
+        <div class="breadcrumb">
+          CPOR /
+          <span
+            id="connectionStatus"
+            class="connection-status"
+            data-state="connecting"
+            role="status"
+            aria-live="polite"
+          >Conectando...</span>
+        </div>
         <time id="clock"></time>
       </header>
       <section id="home" hidden>
@@ -84,11 +93,12 @@
             <h2>Novo cadastro</h2>
             <p>Cadastre uma pessoa ou viatura.</p>
             <strong>Cadastrar →</strong></button
-          ><button id="startSearch">
-            <span class="option-icon">⌕</span>
-            <h2>Consultar cadastro</h2>
-            <p>Localize quem já esteve aqui e registre um novo acesso.</p>
-            <strong>Buscar cadastro →</strong>
+          >
+          <button id="startSearch">
+            <span class="option-icon">↔</span>
+            <h2>Novo fluxo</h2>
+            <p>Identifique a pessoa ou viatura e registre o acesso.</p>
+            <strong>Registrar fluxo →</strong>
           </button>
         </div>
         <p class="home-note">
@@ -261,8 +271,15 @@
               <div class="step-title">Identificação</div>
               <p class="helper" id="keyHint"></p>
               <div class="form-grid" id="keyFields"></div>
+              <div
+                id="flowLookupResult"
+                class="flow-lookup-result"
+                role="status"
+                aria-live="polite"
+                hidden
+              ></div>
               <div class="form-grid" id="profileFields"></div>
-              <p class="helper">
+              <p class="helper" id="profileSaveHint">
                 Salvar o cadastro não registra uma entrada ou saída.
               </p>
             </section>
