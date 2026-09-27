@@ -54,6 +54,10 @@
             <span class="material-symbols-rounded">manage_history</span>
             <span>Alterações</span>
           </button>
+          <button class="nav" data-view="reports">
+            <span class="material-symbols-rounded" aria-hidden="true">description</span>
+            <span>Relatórios</span>
+          </button>
         </nav>
       </div>
       <div class="side-bottom">
@@ -135,6 +139,32 @@
             <p>Cadastros e fluxos são independentes.</p>
           </div>
         </section>
+      </section>
+      <section id="reportsPage" hidden aria-labelledby="reportsTitle">
+        <div class="eyebrow">LIVRO DE CONTROLE DIGITAL</div>
+        <h1 id="reportsTitle">Relatórios</h1>
+        <p>Escolha a data da ocorrência e o documento que deseja baixar.</p>
+        <div class="report-date-row">
+          <label for="reportDate">Data da ficha<input id="reportDate" type="date" required></label>
+          <button type="button" id="reportToday" class="secondary">Hoje</button>
+        </div>
+        <p id="reportCount" class="report-count" role="status"></p>
+        <div class="report-options">
+          <article>
+            <span class="eyebrow">REGISTROS COMPLETOS</span>
+            <h2>Histórico de fluxos</h2>
+            <p>Todos os fluxos da data em ordem cronológica, com identificação, destino, motivo e detalhes de cada ocorrência.</p>
+            <button type="button" id="downloadHistory" class="primary">Baixar histórico</button>
+          </article>
+          <article>
+            <span class="eyebrow">QUANTITATIVOS DO DIA</span>
+            <h2>Relatório resumo</h2>
+            <p>Total de fluxos, entradas e retornos, saídas, finalizações e distribuição por categoria.</p>
+            <button type="button" id="downloadSummary" class="primary">Baixar resumo</button>
+          </article>
+        </div>
+        <p class="report-help">Download em HTML: abra o arquivo e use <strong>Imprimir / salvar PDF</strong> para gerar um PDF. Os documentos abrem sem internet.</p>
+        <p class="report-help">Os relatórios incluem a ficha inteira, independentemente dos filtros do histórico. Registros retroativos pertencem à data da ocorrência. Quantidades de fluxos não representam o efetivo presente.</p>
       </section>
       <section class="heading">
         <div>
