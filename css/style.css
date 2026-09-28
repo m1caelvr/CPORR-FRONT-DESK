@@ -679,6 +679,7 @@ label textarea {
 #home h1 {
     font-size: 36px;
     margin: 0 0 10px 0;
+    padding-top: 10px;
 }
 #home > p {
     color: var(--muted);
