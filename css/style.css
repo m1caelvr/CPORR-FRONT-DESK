@@ -1,4 +1,10 @@
-
+:root {
+    --green: #204c3e;
+    --ink: #20362f;
+    --muted: #718078;
+    --line: #e2e8e4;
+    --bg: #f4f6f5;
+}
 
 .material-symbols-rounded {
     font-variation-settings:
@@ -670,12 +676,9 @@ label textarea {
 [hidden] {
     display: none !important;
 }
-#home {
-    padding: 55px 0 35px;
-}
 #home h1 {
     font-size: 36px;
-    margin: 10px 0;
+    margin: 0 0 10px 0;
 }
 #home > p {
     color: var(--muted);
@@ -772,9 +775,6 @@ label textarea {
     }
     .home-options button {
         padding: 23px;
-    }
-    #home {
-        padding: 25px 0;
     }
     #home h1 {
         font-size: 29px;
